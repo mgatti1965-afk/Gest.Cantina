@@ -29,7 +29,11 @@ import java.util.*
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.core.content.FileProvider
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import java.io.File
+import androidx.compose.material3.HorizontalDivider as Divider
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,16 +60,21 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("GestCantina", fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(12.dp))
-                        Surface(
-                            onClick = { showYearSelector = true },
-                            shape = MaterialTheme.shapes.small,
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(selectedYear.toString(), style = MaterialTheme.typography.titleMedium)
-                                Icon(Icons.Default.ArrowDropDown, null, modifier = Modifier.size(20.dp))
+                        if (selectedTab == 0) { // Mostra l'anno solo nel tab Operazioni
+                            Spacer(Modifier.width(12.dp))
+                            Surface(
+                                onClick = { showYearSelector = true },
+                                shape = MaterialTheme.shapes.small,
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(selectedYear.toString(), style = MaterialTheme.typography.titleMedium)
+                                    Icon(Icons.Default.ArrowDropDown, null, modifier = Modifier.size(20.dp))
+                                }
                             }
                         }
                     }
@@ -283,13 +292,21 @@ fun VarieTab(viewModel: CantinaViewModel) {
                     trailingContent = {
                         Row {
                             IconButton(onClick = {
-                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/csv"
-                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                try {
+                                    val authority = "${context.packageName}.fileprovider"
+                                    val uri = FileProvider.getUriForFile(context, authority, file)
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/csv"
+                                        putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    val chooser = android.content.Intent.createChooser(intent, "Condividi CSV")
+                                    chooser.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    context.startActivity(chooser)
+                                } catch (e: Exception) {
+                                    // Log o feedback all'utente se necessario
                                 }
-                                context.startActivity(android.content.Intent.createChooser(intent, "Condividi"))
                             }) { Icon(Icons.Default.Share, null, tint = MaterialTheme.colorScheme.primary) }
                             IconButton(onClick = { viewModel.deleteExportedFile(file) }) {
                                 Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
@@ -331,8 +348,8 @@ fun ImpiantoTab(
             when (selectedSubTab) {
                 0 -> GrapeTypesList(grapeTypes, onAdd = { editingGrape = null; showGrapeDialog = true }, onEdit = { editingGrape = it; showGrapeDialog = true }, onDelete = onDeleteGrape)
                 1 -> OperationTypesList(operationTypes, onAdd = { editingOp = null; showOpDialog = true }, onEdit = { editingOp = it; showOpDialog = true }, onDelete = onDeleteOp)
-                2 -> Box(Modifier.fillMaxSize())
-                3 -> Box(Modifier.fillMaxSize())
+                2 -> CalcoloZuccheroTab()
+                3 -> TabellaComparazioneTab()
             }
         }
     }
@@ -411,30 +428,123 @@ fun OperationCard(operation: OperationEntity, onEdit: () -> Unit, onDelete: () -
         parser.parse(operation.data)?.let { formatter.format(it) } ?: operation.data
     } catch (e: Exception) { operation.data }
 
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-        Row(Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(displayDate, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("🍇 Uva: ${operation.tipologiaUva}", style = MaterialTheme.typography.titleSmall)
-                val desc = StringBuilder(operation.operazione)
-                if (!operation.aggiuntaDi.isNullOrBlank()) desc.append(": ${operation.aggiuntaDi}")
-                if (operation.quantita != null) desc.append(", ${operation.quantita}")
-                if (!operation.unMis.isNullOrBlank()) desc.append(" ${operation.unMis}")
-                Text(desc.toString(), style = MaterialTheme.typography.bodyLarge)
-                
-                if (!operation.note.isNullOrBlank()) {
-                    Text("Note: ${operation.note}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                // Riga superiore: Data e Uva
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = displayDate,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = MaterialTheme.shapes.extraSmall
+                    ) {
+                        Text(
+                            text = operation.tipologiaUva,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
+
+                Spacer(Modifier.height(4.dp))
+
+                // Titolo Operazione
+                Text(
+                    text = operation.operazione,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+
+                // Dettaglio e Quantità
+                if (!operation.aggiuntaDi.isNullOrBlank() || operation.quantita != null) {
+                    Row(
+                        modifier = Modifier.padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (!operation.aggiuntaDi.isNullOrBlank()) {
+                            Text(
+                                text = operation.aggiuntaDi,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (operation.quantita != null) {
+                            val qtaFormatted = String.format(Locale.US, "%.2f", operation.quantita)
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Text(
+                                    text = "$qtaFormatted ${operation.unMis ?: ""}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Note e Foto
+                if (!operation.note.isNullOrBlank()) {
+                    Text(
+                        text = "Note: ${operation.note}",
+                        modifier = Modifier.padding(top = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
                 if (!operation.foto.isNullOrBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Info, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
                         Spacer(Modifier.width(4.dp))
-                        Text("Foto presente", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                        Text(
+                            text = "Foto allegata",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
                     }
                 }
             }
-            IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+
+            // Pulsanti Azione
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                }
+                IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                }
+            }
         }
     }
 }
@@ -474,6 +584,7 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
     var selectedDate by remember { mutableStateOf(initialOperation?.data ?: sdf.format(Date())) }
     val context = LocalContext.current
     val selectedOpType = operazioneOptions.find { it.denominazione == operazione }
+    val umOptions = listOf("gr/hl", "ql", "hl", "Kg/hl", "°Babo", "°Brix", "I°", "II°", "III°", "IV°")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -487,22 +598,53 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
                         selectedDate = sdf.format(nCal.time)
                     }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
                 }, Modifier.fillMaxWidth()) { Text("Data: $selectedDate") }
+                
                 DropdownSelector("Uva", uvaOptions, uva) { uva = it }
                 DropdownSelector("Operazione", operazioneOptions.map { it.denominazione }, operazione) { operazione = it }
-                if (selectedOpType?.hasAggiuntaDi == true) OutlinedTextField(value = aggiuntaDi, onValueChange = { aggiuntaDi = it }, label = { Text("Dettaglio") }, modifier = Modifier.fillMaxWidth())
+                
+                // Campo 1: Aggiunta di (Stringa)
+                if (selectedOpType?.hasAggiuntaDi == true) {
+                    OutlinedTextField(value = aggiuntaDi, onValueChange = { aggiuntaDi = it }, label = { Text("Dettaglio") }, modifier = Modifier.fillMaxWidth())
+                }
+                
+                // Campo 2 e 3: Quantità (Numerico) e U.M. (Dropdown)
                 if (selectedOpType?.hasQuantita == true || selectedOpType?.hasUnMis == true) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (selectedOpType.hasQuantita) {
-                            OutlinedTextField(value = quantitaStr, onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) quantitaStr = it }, label = { Text("Qta") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                            OutlinedTextField(
+                                value = quantitaStr, 
+                                onValueChange = { 
+                                    // Accetta solo numeri con virgola/punto e max 2 decimali (gestito qui come stringa per l'input)
+                                    if (it.isEmpty() || it.matches(Regex("^\\d*[.,]?\\d{0,2}$"))) quantitaStr = it.replace(",", ".") 
+                                }, 
+                                label = { Text("Qta") }, 
+                                modifier = Modifier.weight(1f), 
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+                            )
                         }
                         if (selectedOpType.hasUnMis) {
-                            OutlinedTextField(value = unMis, onValueChange = { unMis = it }, label = { Text("U.M.") }, modifier = Modifier.weight(0.6f))
+                            Box(modifier = Modifier.weight(1f)) {
+                                DropdownSelector("U.M.", umOptions, unMis) { unMis = it }
+                            }
                         }
                     }
                 }
-                if (selectedOpType?.hasNote == true) OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                
+                // Campo 4: Note (Stringa)
+                if (selectedOpType?.hasNote == true) {
+                    OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                }
+                
+                // Campo 5: Foto (Stringa - placeholder)
                 if (selectedOpType?.hasFoto == true) {
-                    Text("Gestione foto (prossimamente)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    OutlinedTextField(
+                        value = "", 
+                        onValueChange = { }, 
+                        label = { Text("Foto") }, 
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = { Text("Gestione foto (prossimamente)") },
+                        enabled = false
+                    )
                 }
             }
         },
@@ -530,6 +672,121 @@ fun DropdownSelector(label: String, options: List<String>, selected: String, onS
                     text = { Text(opt) },
                     onClick = { onSelected(opt); exp = false }
                 )
+            }
+        }
+    }
+}
+
+@Composable
+fun CalcoloZuccheroTab() {
+    var gradoAttuale by remember { mutableStateOf("") }
+    var litri by remember { mutableStateOf("") }
+    var gradoObiettivo by remember { mutableStateOf("") }
+
+    val babo = gradoAttuale.toDoubleOrNull() ?: 0.0
+    val l = litri.toDoubleOrNull() ?: 0.0
+    val obj = gradoObiettivo.toDoubleOrNull() ?: 0.0
+
+    // Formule
+    val brix = babo * 1.58 // Approssimazione comune
+    val alcol = babo * 0.65
+    val zuccheroNecessario = if (obj > babo && l > 0) (obj - babo) * 1.7 * (l / 100.0) else 0.0
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text("Calcolatore Arricchimento", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+
+        OutlinedTextField(
+            value = gradoAttuale,
+            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) gradoAttuale = it },
+            label = { Text("Grado attuale (°Babo)") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+
+        OutlinedTextField(
+            value = litri,
+            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) litri = it },
+            label = { Text("Litri totali") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+
+        OutlinedTextField(
+            value = gradoObiettivo,
+            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) gradoObiettivo = it },
+            label = { Text("Grado obiettivo (°Babo)") },
+            modifier = Modifier.fillMaxWidth(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+        )
+
+        Divider()
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Risultati Conversione", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Grado Brix stimato: ${String.format("%.2f", brix)} °Bx")
+                Text("Alcol potenziale: ${String.format("%.2f", alcol)} % vol")
+                
+                if (zuccheroNecessario > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        "Zucchero da aggiungere:",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "${String.format("%.2f", zuccheroNecessario)} Kg",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+        
+        Text(
+            "Nota: I calcoli sono basati su coefficienti standard (1.7kg/hl per 1°Babo). Verificare sempre con strumenti professionali.",
+            style = MaterialTheme.typography.bodySmall,
+            fontStyle = FontStyle.Italic
+        )
+    }
+}
+
+@Composable
+fun TabellaComparazioneTab() {
+    val range = (120..250).step(5) // Esempio da 12.0 a 25.0 Babo
+
+    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Text("Tabella di Comparazione", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        
+        Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).padding(8.dp)) {
+            Text("°Babo", Modifier.weight(1f), color = Color.White, fontWeight = FontWeight.Bold)
+            Text("°Brix", Modifier.weight(1f), color = Color.White, fontWeight = FontWeight.Bold)
+            Text("% Alcol", Modifier.weight(1f), color = Color.White, fontWeight = FontWeight.Bold)
+        }
+
+        LazyColumn(Modifier.weight(1f)) {
+            items(range.toList()) { value ->
+                val b = value / 10.0
+                val bx = b * 1.58
+                val alc = b * 0.65
+                
+                Row(Modifier.fillMaxWidth().padding(8.dp)) {
+                    Text(String.format(Locale.ITALY, "%.1f", b), Modifier.weight(1f))
+                    Text(String.format(Locale.ITALY, "%.1f", bx), Modifier.weight(1f))
+                    Text(String.format(Locale.ITALY, "%.2f", alc), Modifier.weight(1f))
+                }
+                Divider(thickness = 0.5.dp)
             }
         }
     }
