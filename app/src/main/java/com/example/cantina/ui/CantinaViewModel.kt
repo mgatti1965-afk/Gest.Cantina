@@ -213,20 +213,20 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         // Recuperiamo tutte le operazioni (senza filtro anno per il backup completo)
         val allOps = operationDao.getAllOperationsSync()
         
-        val header = "id,data,tipologiaUva,operazione,vendemmiaAnno,aggiuntaDi,quantita,unMis,note,foto"
+        val header = "id,vendemmiaAnno,data,tipologiaUva,operazione,aggiuntaDi,quantita,unMis,note,foto"
         val csv = StringBuilder(header).append("\n")
         
         allOps.forEach { op ->
             csv.append("${op.id},")
+                .append("${op.vendemmiaAnno},")
                 .append("${op.data},")
                 .append("${escapeCsv(op.tipologiaUva)},")
                 .append("${escapeCsv(op.operazione)},")
-                .append("${op.vendemmiaAnno},")
                 .append("${escapeCsv(op.aggiuntaDi ?: "")},")
                 .append("${op.quantita ?: ""},")
                 .append("${escapeCsv(op.unMis ?: "")},")
                 .append("${escapeCsv(op.note ?: "")},")
-                .append(escapeCsv(op.foto ?: ""))
+                .append("${escapeCsv(op.foto ?: "")}")
                 .append("\n")
         }
         
@@ -259,8 +259,11 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
             
             if (parts.size >= 10) {
                 try {
-                    val uva = unescapeCsv(parts[2])
-                    val operazione = unescapeCsv(parts[3])
+                    val id = parts[0].toLongOrNull() ?: 0L
+                    val anno = parts[1].toIntOrNull() ?: _selectedYear.value
+                    val data = parts[2]
+                    val uva = unescapeCsv(parts[3])
+                    val operazione = unescapeCsv(parts[4])
 
                     // 1. Se l'uva non esiste, la aggiungo automaticamente
                     if (uva !in existingGrapes && uva.isNotBlank()) {
@@ -282,11 +285,11 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
                     }
 
                     val op = OperationEntity(
-                        id = parts[0].toLongOrNull() ?: 0L,
-                        data = parts[1],
+                        id = id,
+                        vendemmiaAnno = anno,
+                        data = data,
                         tipologiaUva = uva,
                         operazione = operazione,
-                        vendemmiaAnno = parts[4].toIntOrNull() ?: _selectedYear.value,
                         aggiuntaDi = unescapeCsv(parts[5]).takeIf { it.isNotBlank() },
                         quantita = parts[6].toDoubleOrNull(),
                         unMis = unescapeCsv(parts[7]).takeIf { it.isNotBlank() },

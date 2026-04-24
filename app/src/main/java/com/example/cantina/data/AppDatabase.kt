@@ -65,7 +65,7 @@ abstract class AppDatabase : RoomDatabase() {
                 val existingOpTypes = dao.getAllOperationTypesSync().map { it.denominazione }
 
                 // Default Uve - Ripristino solo se mancanti
-                listOf("Lambrusco", "Marzemino", "Merlot", "Pinot Grigio").forEach { grape ->
+                listOf("Bianco", "Lambrusco", "Marzemino", "Merlot", "Pinot Grigio").forEach { grape ->
                     if (grape !in existingGrapes) {
                         dao.insertGrapeType(GrapeTypeEntity(denominazione = grape))
                     }
