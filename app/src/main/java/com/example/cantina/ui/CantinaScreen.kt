@@ -119,14 +119,14 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Share, null) },
-                    label = { Text("Varie") }
+                    icon = { Icon(Icons.Default.Settings, null) },
+                    label = { Text("Impianto") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Default.Settings, null) },
-                    label = { Text("Impianto") }
+                    icon = { Icon(Icons.Default.Share, null) },
+                    label = { Text("Varie") }
                 )
             }
         }
@@ -140,8 +140,7 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
                     onDeleteClick = { showDeleteConfirm = it }
                 )
                 1 -> Box(Modifier.fillMaxSize()) // Passaggi vuota
-                2 -> VarieTab(viewModel) // Import/Export CSV
-                3 -> ImpiantoTab(
+                2 -> ImpiantoTab(
                     grapeTypes = grapeTypes,
                     operationTypes = operationTypes,
                     onAddGrape = { viewModel.addGrapeType(it) },
@@ -151,6 +150,7 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
                     onUpdateOp = { viewModel.updateOperationType(it) },
                     onDeleteOp = { viewModel.deleteOperationType(it) }
                 )
+                3 -> VarieTab(viewModel) // Import/Export CSV
             }
         }
     }
