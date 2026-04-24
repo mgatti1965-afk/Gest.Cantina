@@ -74,16 +74,16 @@ abstract class AppDatabase : RoomDatabase() {
                 // Default Operazioni - Ripristino solo se mancanti con i relativi checkbox
                 val defaultOps = listOf(
                     OperationTypeEntity(denominazione = "*"),
-                    OperationTypeEntity(denominazione = "Aggiunta di", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true),
-                    OperationTypeEntity(denominazione = "Analisi", hasQuantita = true, hasNote = true, hasFoto = true),
+                    OperationTypeEntity(denominazione = "Aggiunta di", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false),
+                    OperationTypeEntity(denominazione = "Analisi", hasAggiuntaDi = false, hasQuantita = true, hasUnMis = false, hasNote = true, hasFoto = true),
                     OperationTypeEntity(denominazione = "Ferm.Inizio"),
                     OperationTypeEntity(denominazione = "Ferm.Fine"),
-                    OperationTypeEntity(denominazione = "Gradazione", hasQuantita = true, hasUnMis = true, hasNote = true),
-                    OperationTypeEntity(denominazione = "Note - Foto", hasNote = true, hasFoto = true),
-                    OperationTypeEntity(denominazione = "Temperatura", hasQuantita = true, hasUnMis = true, hasNote = true),
-                    OperationTypeEntity(denominazione = "Travaso", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true),
-                    OperationTypeEntity(denominazione = "Vendemmiato", hasQuantita = true, hasUnMis = true, hasNote = true),
-                    OperationTypeEntity(denominazione = "Vinificazione", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true)
+                    OperationTypeEntity(denominazione = "Gradazione", hasAggiuntaDi = false, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false),
+                    OperationTypeEntity(denominazione = "Note - Foto", hasAggiuntaDi = false, hasQuantita = false, hasUnMis = false, hasNote = true, hasFoto = true),
+                    OperationTypeEntity(denominazione = "Temperatura", hasAggiuntaDi = false, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false),
+                    OperationTypeEntity(denominazione = "Travaso", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false),
+                    OperationTypeEntity(denominazione = "Vendemmiato", hasAggiuntaDi = false, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false),
+                    OperationTypeEntity(denominazione = "Vinificazione", hasAggiuntaDi = true, hasQuantita = true, hasUnMis = true, hasNote = true, hasFoto = false)
                 )
 
                 defaultOps.forEach { opType ->

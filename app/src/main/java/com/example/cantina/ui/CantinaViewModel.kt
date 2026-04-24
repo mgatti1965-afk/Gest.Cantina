@@ -55,15 +55,15 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         viewModelScope.launch { operationDao.updateOperationType(operationType) }
     }
 
-    fun addOperationType(denominazione: String) {
+    fun addOperationType(denominazione: String, add: Boolean = false, qta: Boolean = false, um: Boolean = false, nt: Boolean = false, ft: Boolean = false) {
         viewModelScope.launch { 
             operationDao.insertOperationType(OperationTypeEntity(
                 denominazione = denominazione,
-                hasAggiuntaDi = true,
-                hasQuantita = true,
-                hasUnMis = true,
-                hasNote = true,
-                hasFoto = true
+                hasAggiuntaDi = add,
+                hasQuantita = qta,
+                hasUnMis = um,
+                hasNote = nt,
+                hasFoto = ft
             ))
         }
     }

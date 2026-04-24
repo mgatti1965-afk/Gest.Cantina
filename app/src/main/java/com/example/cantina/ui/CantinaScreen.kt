@@ -131,26 +131,33 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
             }
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding)) {
-            when (selectedTab) {
-                0 -> OperationsTab(
-                    operations = operations,
-                    onAddClick = { operationToEdit = null; showOperationDialog = true },
-                    onEditClick = { operationToEdit = it; showOperationDialog = true },
-                    onDeleteClick = { showDeleteConfirm = it }
-                )
-                1 -> Box(Modifier.fillMaxSize()) // Passaggi vuota
-                2 -> ImpiantoTab(
-                    grapeTypes = grapeTypes,
-                    operationTypes = operationTypes,
-                    onAddGrape = { viewModel.addGrapeType(it) },
-                    onUpdateGrape = { viewModel.updateGrapeType(it) },
-                    onDeleteGrape = { viewModel.deleteGrapeType(it) },
-                    onAddOp = { viewModel.addOperationType(it) },
-                    onUpdateOp = { viewModel.updateOperationType(it) },
-                    onDeleteOp = { viewModel.deleteOperationType(it) }
-                )
-                3 -> VarieTab(viewModel) // Import/Export CSV
+        // Usiamo Box come contenitore principale per gestire il padding dello Scaffold
+        // e weight(1f) per far sì che il contenuto occupi tutto lo spazio tra topBar e bottomBar
+        Column(modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    0 -> OperationsTab(
+                        operations = operations,
+                        onAddClick = { operationToEdit = null; showOperationDialog = true },
+                        onEditClick = { operationToEdit = it; showOperationDialog = true },
+                        onDeleteClick = { showDeleteConfirm = it }
+                    )
+                    1 -> Box(Modifier.fillMaxSize())
+                    2 -> ImpiantoTab(
+                        grapeTypes = grapeTypes,
+                        operationTypes = operationTypes,
+                        onAddGrape = { viewModel.addGrapeType(it) },
+                        onUpdateGrape = { viewModel.updateGrapeType(it) },
+                        onDeleteGrape = { viewModel.deleteGrapeType(it) },
+                        onAddOp = { den, add, qta, um, nt, ft -> viewModel.addOperationType(den, add, qta, um, nt, ft) },
+                        onUpdateOp = { viewModel.updateOperationType(it) },
+                        onDeleteOp = { viewModel.deleteOperationType(it) }
+                    )
+                    3 -> VarieTab(viewModel)
+                }
             }
         }
     }
@@ -212,7 +219,9 @@ fun OperationsTab(
     Column(modifier = Modifier.fillMaxSize()) {
         Button(
             onClick = onAddClick,
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             shape = MaterialTheme.shapes.medium
         ) {
             Icon(Icons.Default.Add, null)
@@ -221,7 +230,7 @@ fun OperationsTab(
         }
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f), // Usiamo weight invece di fillMaxSize per lo scroll corretto
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -300,7 +309,7 @@ fun ImpiantoTab(
     onAddGrape: (String) -> Unit,
     onUpdateGrape: (GrapeTypeEntity) -> Unit,
     onDeleteGrape: (GrapeTypeEntity) -> Unit,
-    onAddOp: (String) -> Unit,
+    onAddOp: (String, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit,
     onUpdateOp: (OperationTypeEntity) -> Unit,
     onDeleteOp: (OperationTypeEntity) -> Unit
 ) {
@@ -310,7 +319,7 @@ fun ImpiantoTab(
     var showOpDialog by remember { mutableStateOf(false) }
     var editingOp by remember { mutableStateOf<OperationTypeEntity?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize()) { // fillMaxSize invece di fillMaxHeight
         TabRow(selectedTabIndex = selectedSubTab) {
             Tab(selected = selectedSubTab == 0, onClick = { selectedSubTab = 0 }) { Text("Uva", Modifier.padding(16.dp)) }
             Tab(selected = selectedSubTab == 1, onClick = { selectedSubTab = 1 }) { Text("Operazioni", Modifier.padding(16.dp)) }
@@ -318,11 +327,13 @@ fun ImpiantoTab(
             Tab(selected = selectedSubTab == 3, onClick = { selectedSubTab = 3 }) { Text("Tabella di comparazione", Modifier.padding(16.dp)) }
         }
 
-        when (selectedSubTab) {
-            0 -> GrapeTypesList(grapeTypes, onAdd = { editingGrape = null; showGrapeDialog = true }, onEdit = { editingGrape = it; showGrapeDialog = true }, onDelete = onDeleteGrape)
-            1 -> OperationTypesList(operationTypes, onAdd = { editingOp = null; showOpDialog = true }, onEdit = { editingOp = it; showOpDialog = true }, onDelete = onDeleteOp)
-            2 -> Box(Modifier.fillMaxSize()) // Calcolo zucchero
-            3 -> Box(Modifier.fillMaxSize()) // Tabella di comparazione
+        Box(modifier = Modifier.weight(1f)) {
+            when (selectedSubTab) {
+                0 -> GrapeTypesList(grapeTypes, onAdd = { editingGrape = null; showGrapeDialog = true }, onEdit = { editingGrape = it; showGrapeDialog = true }, onDelete = onDeleteGrape)
+                1 -> OperationTypesList(operationTypes, onAdd = { editingOp = null; showOpDialog = true }, onEdit = { editingOp = it; showOpDialog = true }, onDelete = onDeleteOp)
+                2 -> Box(Modifier.fillMaxSize())
+                3 -> Box(Modifier.fillMaxSize())
+            }
         }
     }
 
@@ -333,8 +344,8 @@ fun ImpiantoTab(
         })
     }
     if (showOpDialog) {
-        OperationTypeDialog(editingOp, onDismiss = { showOpDialog = false }, onConfirm = { den, add, qta ->
-            if (editingOp == null) onAddOp(den) else onUpdateOp(editingOp!!.copy(denominazione = den, hasAggiuntaDi = add, hasQuantita = qta))
+        OperationTypeDialog(editingOp, onDismiss = { showOpDialog = false }, onConfirm = { den, add, qta, um, nt, ft ->
+            if (editingOp == null) onAddOp(den, add, qta, um, nt, ft) else onUpdateOp(editingOp!!.copy(denominazione = den, hasAggiuntaDi = add, hasQuantita = qta, hasUnMis = um, hasNote = nt, hasFoto = ft))
             showOpDialog = false
         })
     }
@@ -365,13 +376,30 @@ fun OperationTypesList(types: List<OperationTypeEntity>, onAdd: () -> Unit, onEd
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(type.denominazione, fontWeight = FontWeight.Bold)
-                        Text("Campi: ${if(type.hasAggiuntaDi) "Dettaglio " else ""}${if(type.hasQuantita) "Qta " else ""}", style = MaterialTheme.typography.labelSmall)
+                        Row(modifier = Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            StatusIndicator("Agg", type.hasAggiuntaDi)
+                            StatusIndicator("Qta", type.hasQuantita)
+                            StatusIndicator("UM", type.hasUnMis)
+                            StatusIndicator("Note", type.hasNote)
+                            StatusIndicator("Foto", type.hasFoto)
+                        }
                     }
                     IconButton(onClick = { onEdit(type) }) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
                     IconButton(onClick = { onDelete(type) }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                 }
             }
         }
+    }
+}
+
+@Composable
+fun StatusIndicator(label: String, active: Boolean) {
+    Surface(
+        shape = MaterialTheme.shapes.extraSmall,
+        color = if (active) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (active) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Text(label, modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -390,8 +418,20 @@ fun OperationCard(operation: OperationEntity, onEdit: () -> Unit, onDelete: () -
                 Text("🍇 Uva: ${operation.tipologiaUva}", style = MaterialTheme.typography.titleSmall)
                 val desc = StringBuilder(operation.operazione)
                 if (!operation.aggiuntaDi.isNullOrBlank()) desc.append(": ${operation.aggiuntaDi}")
-                if (operation.quantita != null) desc.append(", ${operation.quantita} ${operation.unMis ?: ""}")
+                if (operation.quantita != null) desc.append(", ${operation.quantita}")
+                if (!operation.unMis.isNullOrBlank()) desc.append(" ${operation.unMis}")
                 Text(desc.toString(), style = MaterialTheme.typography.bodyLarge)
+                
+                if (!operation.note.isNullOrBlank()) {
+                    Text("Note: ${operation.note}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (!operation.foto.isNullOrBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.secondary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("Foto presente", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                }
             }
             IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, null, tint = MaterialTheme.colorScheme.primary) }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
@@ -450,13 +490,20 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
                 DropdownSelector("Uva", uvaOptions, uva) { uva = it }
                 DropdownSelector("Operazione", operazioneOptions.map { it.denominazione }, operazione) { operazione = it }
                 if (selectedOpType?.hasAggiuntaDi == true) OutlinedTextField(value = aggiuntaDi, onValueChange = { aggiuntaDi = it }, label = { Text("Dettaglio") }, modifier = Modifier.fillMaxWidth())
-                if (selectedOpType?.hasQuantita == true) {
+                if (selectedOpType?.hasQuantita == true || selectedOpType?.hasUnMis == true) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(value = quantitaStr, onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) quantitaStr = it }, label = { Text("Qta") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                        OutlinedTextField(value = unMis, onValueChange = { unMis = it }, label = { Text("U.M.") }, modifier = Modifier.weight(0.6f))
+                        if (selectedOpType.hasQuantita) {
+                            OutlinedTextField(value = quantitaStr, onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) quantitaStr = it }, label = { Text("Qta") }, modifier = Modifier.weight(1f), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                        }
+                        if (selectedOpType.hasUnMis) {
+                            OutlinedTextField(value = unMis, onValueChange = { unMis = it }, label = { Text("U.M.") }, modifier = Modifier.weight(0.6f))
+                        }
                     }
                 }
-                OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                if (selectedOpType?.hasNote == true) OutlinedTextField(value = note, onValueChange = { note = it }, label = { Text("Note") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                if (selectedOpType?.hasFoto == true) {
+                    Text("Gestione foto (prossimamente)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                }
             }
         },
         confirmButton = { Button(onClick = { onConfirm(uva, operazione, selectedDate, aggiuntaDi, quantitaStr.toDoubleOrNull(), unMis, note, null) }, enabled = uva.isNotBlank() && operazione.isNotBlank()) { Text("Salva") } },
@@ -496,18 +543,25 @@ fun GrapeTypeDialog(initial: GrapeTypeEntity?, onDismiss: () -> Unit, onConfirm:
 }
 
 @Composable
-fun OperationTypeDialog(initial: OperationTypeEntity?, onDismiss: () -> Unit, onConfirm: (String, Boolean, Boolean) -> Unit) {
+fun OperationTypeDialog(initial: OperationTypeEntity?, onDismiss: () -> Unit, onConfirm: (String, Boolean, Boolean, Boolean, Boolean, Boolean) -> Unit) {
     var den by remember { mutableStateOf(initial?.denominazione ?: "") }
     var add by remember { mutableStateOf(initial?.hasAggiuntaDi ?: false) }
     var qta by remember { mutableStateOf(initial?.hasQuantita ?: false) }
+    var um by remember { mutableStateOf(initial?.hasUnMis ?: false) }
+    var nt by remember { mutableStateOf(initial?.hasNote ?: false) }
+    var ft by remember { mutableStateOf(initial?.hasFoto ?: false) }
+    
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Tipo Operazione") },
         text = {
-            Column {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
                 OutlinedTextField(value = den, onValueChange = { den = it }, label = { Text("Nome") }, modifier = Modifier.fillMaxWidth())
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = add, onCheckedChange = { add = it }); Text("Richiede Dettaglio") }
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = qta, onCheckedChange = { qta = it }); Text("Richiede Quantità") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = add, onCheckedChange = { add = it }); Text("Aggiunta di.") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = qta, onCheckedChange = { qta = it }); Text("Quantità.") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = um, onCheckedChange = { um = it }); Text("Un.Mis.") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = nt, onCheckedChange = { nt = it }); Text("Note.") }
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(checked = ft, onCheckedChange = { ft = it }); Text("Foto.") }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(den, add, qta) }, enabled = den.isNotBlank()) { Text("Salva") } },
+        confirmButton = { Button(onClick = { onConfirm(den, add, qta, um, nt, ft) }, enabled = den.isNotBlank()) { Text("Salva") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } })
 }
