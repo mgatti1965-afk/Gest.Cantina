@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -487,7 +488,7 @@ fun OperationCard(operation: OperationEntity, onEdit: () -> Unit, onDelete: () -
                             )
                         }
                         if (operation.quantita != null) {
-                            val qtaFormatted = String.format(Locale.US, "%.2f", operation.quantita)
+                            val qtaFormatted = String.format(Locale.ITALY, "%.2f", operation.quantita)
                             Surface(
                                 color = MaterialTheme.colorScheme.secondaryContainer,
                                 shape = MaterialTheme.shapes.small
@@ -571,13 +572,13 @@ fun YearSelectorDialog(years: List<Int>, selectedYear: Int, onYearSelected: (Int
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>, operazioneOptions: List<OperationTypeEntity>, onDismiss: () -> Unit, onConfirm: (String, String, String, String?, Double?, String?, String?, String?) -> Unit) {
     var uva by remember { mutableStateOf(initialOperation?.tipologiaUva ?: "") }
     var operazione by remember { mutableStateOf(initialOperation?.operazione ?: "") }
     var aggiuntaDi by remember { mutableStateOf(initialOperation?.aggiuntaDi ?: "") }
-    var quantitaStr by remember { mutableStateOf(initialOperation?.quantita?.toString() ?: "") }
+    var quantitaStr by remember { mutableStateOf(initialOperation?.quantita?.toString()?.replace(".", ",") ?: "") }
     var unMis by remember { mutableStateOf(initialOperation?.unMis ?: "") }
     var note by remember { mutableStateOf(initialOperation?.note ?: "") }
     val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.ITALY)
@@ -602,9 +603,27 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
                 DropdownSelector("Uva", uvaOptions, uva) { uva = it }
                 DropdownSelector("Operazione", operazioneOptions.map { it.denominazione }, operazione) { operazione = it }
                 
-                // Campo 1: Aggiunta di (Stringa)
+                // Campo 1: Aggiunta di (Opzioni fisse)
                 if (selectedOpType?.hasAggiuntaDi == true) {
-                    OutlinedTextField(value = aggiuntaDi, onValueChange = { aggiuntaDi = it }, label = { Text("Dettaglio") }, modifier = Modifier.fillMaxWidth())
+                    val opzioniAggiunta = listOf("*", "Bisolfito", "Ac.Tartarico", "Ac.Citrico", "Bentonite", "Zucchero", "Marzemino", "Merlot", "Lambrusco")
+                    Text("Dettaglio (Aggiunta di):", style = MaterialTheme.typography.labelMedium)
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        opzioniAggiunta.forEach { opzione ->
+                            val isSelected = aggiuntaDi == opzione
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { aggiuntaDi = if (isSelected) "" else opzione },
+                                label = { Text(opzione) },
+                                leadingIcon = if (isSelected) {
+                                    { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
+                    }
                 }
                 
                 // Campo 2 e 3: Quantità (Numerico) e U.M. (Dropdown)
@@ -614,8 +633,10 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
                             OutlinedTextField(
                                 value = quantitaStr, 
                                 onValueChange = { 
-                                    // Accetta solo numeri con virgola/punto e max 2 decimali (gestito qui come stringa per l'input)
-                                    if (it.isEmpty() || it.matches(Regex("^\\d*[.,]?\\d{0,2}$"))) quantitaStr = it.replace(",", ".") 
+                                    // Accetta solo numeri con virgola o punto e max 2 decimali
+                                    if (it.isEmpty() || it.matches(Regex("^\\d*[.,]?\\d{0,2}$"))) {
+                                        quantitaStr = it
+                                    } 
                                 }, 
                                 label = { Text("Qta") }, 
                                 modifier = Modifier.weight(1f), 
@@ -648,7 +669,15 @@ fun OperationDialog(initialOperation: OperationEntity?, uvaOptions: List<String>
                 }
             }
         },
-        confirmButton = { Button(onClick = { onConfirm(uva, operazione, selectedDate, aggiuntaDi, quantitaStr.toDoubleOrNull(), unMis, note, null) }, enabled = uva.isNotBlank() && operazione.isNotBlank()) { Text("Salva") } },
+        confirmButton = { 
+            Button(
+                onClick = { 
+                    val qtaValue = quantitaStr.replace(",", ".").toDoubleOrNull()
+                    onConfirm(uva, operazione, selectedDate, aggiuntaDi, qtaValue, unMis, note, null) 
+                }, 
+                enabled = uva.isNotBlank() && operazione.isNotBlank()
+            ) { Text("Salva") } 
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } }
     )
 }

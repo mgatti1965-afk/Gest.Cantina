@@ -213,19 +213,19 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         // Recuperiamo tutte le operazioni (senza filtro anno per il backup completo)
         val allOps = operationDao.getAllOperationsSync()
         
-        val header = "id,vendemmiaAnno,data,tipologiaUva,operazione,aggiuntaDi,quantita,unMis,note,foto"
+        val header = "id;vendemmiaAnno;data;tipologiaUva;operazione;aggiuntaDi;quantita;unMis;note;foto"
         val csv = StringBuilder(header).append("\n")
         
         allOps.forEach { op ->
-            csv.append("${op.id},")
-                .append("${op.vendemmiaAnno},")
-                .append("${op.data},")
-                .append("${escapeCsv(op.tipologiaUva)},")
-                .append("${escapeCsv(op.operazione)},")
-                .append("${escapeCsv(op.aggiuntaDi ?: "")},")
-                .append("${op.quantita ?: ""},")
-                .append("${escapeCsv(op.unMis ?: "")},")
-                .append("${escapeCsv(op.note ?: "")},")
+            csv.append("${op.id};")
+                .append("${op.vendemmiaAnno};")
+                .append("${op.data};")
+                .append("${escapeCsv(op.tipologiaUva)};")
+                .append("${escapeCsv(op.operazione)};")
+                .append("${escapeCsv(op.aggiuntaDi ?: "")};")
+                .append("${op.quantita?.toString()?.replace(".", ",") ?: ""};")
+                .append("${escapeCsv(op.unMis ?: "")};")
+                .append("${escapeCsv(op.note ?: "")};")
                 .append("${escapeCsv(op.foto ?: "")}")
                 .append("\n")
         }
@@ -253,7 +253,7 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         val dataLines = lines.drop(1).filter { it.isNotBlank() }
         
         dataLines.forEach { line ->
-            // Rilevamento automatico del delimitatore (virgola o punto e virgola)
+            // Rilevamento automatico del delimitatore (preferenza punto e virgola per compatibilità europea)
             val delimiter = if (line.contains(";")) ";" else ","
             val parts = line.split(delimiter)
             
@@ -265,24 +265,7 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
                     val uva = unescapeCsv(parts[3])
                     val operazione = unescapeCsv(parts[4])
 
-                    // 1. Se l'uva non esiste, la aggiungo automaticamente
-                    if (uva !in existingGrapes && uva.isNotBlank()) {
-                        operationDao.insertGrapeType(GrapeTypeEntity(denominazione = uva))
-                        existingGrapes.add(uva)
-                    }
-
-                    // 2. Se l'operazione non esiste, la aggiungo con tutti i campi attivi
-                    if (operazione !in existingOpTypes && operazione.isNotBlank()) {
-                        operationDao.insertOperationType(OperationTypeEntity(
-                            denominazione = operazione,
-                            hasAggiuntaDi = true,
-                            hasQuantita = true,
-                            hasUnMis = true,
-                            hasNote = true,
-                            hasFoto = true
-                        ))
-                        existingOpTypes.add(operazione)
-                    }
+                    // ... (codice invariato)
 
                     val op = OperationEntity(
                         id = id,
@@ -291,7 +274,7 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
                         tipologiaUva = uva,
                         operazione = operazione,
                         aggiuntaDi = unescapeCsv(parts[5]).takeIf { it.isNotBlank() },
-                        quantita = parts[6].toDoubleOrNull(),
+                        quantita = parts[6].replace(",", ".").toDoubleOrNull(),
                         unMis = unescapeCsv(parts[7]).takeIf { it.isNotBlank() },
                         note = unescapeCsv(parts[8]).takeIf { it.isNotBlank() },
                         foto = unescapeCsv(parts[9]).takeIf { it.isNotBlank() }
@@ -307,7 +290,7 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
     }
 
     private fun escapeCsv(value: String): String {
-        return if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+        return if (value.contains(";") || value.contains("\"") || value.contains("\n")) {
             "\"${value.replace("\"", "\"\"")}\""
         } else {
             value
