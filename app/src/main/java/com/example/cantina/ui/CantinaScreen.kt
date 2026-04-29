@@ -48,6 +48,19 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
     val selectedYear by viewModel.selectedYear.collectAsState()
     val availableYears by viewModel.availableYears.collectAsState(initial = emptyList())
 
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Osserva i messaggi dal ViewModel
+    LaunchedEffect(viewModel.message) {
+        viewModel.message.collect { msg ->
+            snackbarHostState.showSnackbar(
+                message = msg,
+                actionLabel = "OK",
+                duration = SnackbarDuration.Indefinite
+            )
+        }
+    }
+
     var selectedTab by remember { mutableIntStateOf(0) }
     var showYearSelector by remember { mutableStateOf(false) }
     
@@ -56,6 +69,7 @@ fun CantinaScreen(viewModel: CantinaViewModel) {
     var showDeleteConfirm by remember { mutableStateOf<OperationEntity?>(null) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

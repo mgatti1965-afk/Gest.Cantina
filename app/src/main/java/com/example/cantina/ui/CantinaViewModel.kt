@@ -10,6 +10,10 @@ import com.example.cantina.data.StepEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.map
 import java.io.File
 import kotlinx.coroutines.flow.combine
 import java.util.Date
@@ -28,6 +32,14 @@ enum class SortOrder {
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
+
+    // --- NOTIFICHE ---
+    private val _message = MutableSharedFlow<String>()
+    val message: SharedFlow<String> = _message.asSharedFlow()
+
+    fun showMessage(text: String) {
+        viewModelScope.launch { _message.emit(text) }
+    }
 
     // --- CONFIGURAZIONE IMPIANTO ---
     val grapeTypes: StateFlow<List<GrapeTypeEntity>> = operationDao.getAllGrapeTypes()
@@ -90,6 +102,13 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
     val selectedYear: StateFlow<Int> = _selectedYear
 
     val availableYears: StateFlow<List<Int>> = operationDao.getAvailableYears()
+        .map { yearsFromDb ->
+            val calendar = Calendar.getInstance()
+            val currentYear = calendar.get(Calendar.YEAR)
+            // Range: ultimi 5 anni + il prossimo
+            val range = (currentYear - 5 .. currentYear + 1).toList()
+            (yearsFromDb + range).distinct().sortedDescending()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), listOf(getDefaultHarvestYear()))
 
     // Current navigation tab
@@ -233,8 +252,10 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         return try {
             file.writeText(csv.toString())
             loadExportedFiles(exportsDir)
+            showMessage("Esportate ${allOps.size} operazioni con successo.")
             file
         } catch (e: Exception) {
+            showMessage("Errore durante l'esportazione.")
             null
         }
     }
@@ -242,51 +263,78 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
     // Funzione per importare operazioni da una stringa CSV
     suspend fun importOperationsFromCsv(csvData: String): Int {
         var importedCount = 0
-        val lines = csvData.lines()
+        val lines = csvData.lines().filter { it.isNotBlank() }
         if (lines.isEmpty()) return 0
         
-        // Carico i nomi esistenti per evitare duplicati e gestire l'auto-popolamento
-        val existingGrapes = operationDao.getAllGrapeTypesSync().map { it.denominazione }.toMutableSet()
-        val existingOpTypes = operationDao.getAllOperationTypesSync().map { it.denominazione }.toMutableSet()
-
-        // Salta l'header
-        val dataLines = lines.drop(1).filter { it.isNotBlank() }
+        // Rilevamento header e mappatura colonne
+        val firstLine = lines.first()
+        val delimiter = if (firstLine.contains(";")) ";" else ","
+        val headers = firstLine.split(delimiter).map { it.trim().lowercase() }
         
-        dataLines.forEach { line ->
-            // Rilevamento automatico del delimitatore (preferenza punto e virgola per compatibilità europea)
-            val delimiter = if (line.contains(";")) ";" else ","
-            val parts = line.split(delimiter)
-            
-            if (parts.size >= 10) {
-                try {
-                    val id = parts[0].toLongOrNull() ?: 0L
-                    val anno = parts[1].toIntOrNull() ?: _selectedYear.value
-                    val data = parts[2]
-                    val uva = unescapeCsv(parts[3])
-                    val operazione = unescapeCsv(parts[4])
+        val hasHeader = headers.contains("operazione") || headers.contains("data")
+        val dataLines = if (hasHeader) lines.drop(1) else lines
 
-                    // ... (codice invariato)
+        // Mappatura indici basata sui nomi delle colonne (default su posizione se non trova header)
+        val idxId = headers.indexOf("id").takeIf { it >= 0 } ?: 0
+        val idxAnno = headers.indexOf("vendemmiaanno").takeIf { it >= 0 } ?: 1
+        val idxData = headers.indexOf("data").takeIf { it >= 0 } ?: 2
+        val idxUva = headers.indexOf("tipologiauva").takeIf { it >= 0 } ?: 3
+        val idxOp = headers.indexOf("operazione").takeIf { it >= 0 } ?: 4
+        val idxAgg = headers.indexOf("aggiuntadi").takeIf { it >= 0 } ?: 5
+        val idxQta = headers.indexOf("quantita").takeIf { it >= 0 } ?: 6
+        val idxUm = headers.indexOf("unmis").takeIf { it >= 0 } ?: 7
+        val idxNote = headers.indexOf("note").takeIf { it >= 0 } ?: 8
+        val idxFoto = headers.indexOf("foto").takeIf { it >= 0 } ?: 9
+
+        dataLines.forEach { line ->
+            val parts = line.split(delimiter)
+            if (parts.size > idxOp) {
+                try {
+                    val dataRaw = if (parts.size > idxData) parts[idxData].trim() else ""
+                    if (dataRaw.isBlank()) return@forEach
+
+                    // Calcolo anno: se presente nel CSV lo usiamo, altrimenti lo deduciamo dalla data
+                    var anno = if (parts.size > idxAnno) parts[idxAnno].toIntOrNull() else null
+                    if (anno == null) {
+                        anno = getHarvestYearFromDate(dataRaw)
+                    }
 
                     val op = OperationEntity(
-                        id = id,
+                        id = if (parts.size > idxId) parts[idxId].toLongOrNull() ?: 0L else 0L,
                         vendemmiaAnno = anno,
-                        data = data,
-                        tipologiaUva = uva,
-                        operazione = operazione,
-                        aggiuntaDi = unescapeCsv(parts[5]).takeIf { it.isNotBlank() },
-                        quantita = parts[6].replace(",", ".").toDoubleOrNull(),
-                        unMis = unescapeCsv(parts[7]).takeIf { it.isNotBlank() },
-                        note = unescapeCsv(parts[8]).takeIf { it.isNotBlank() },
-                        foto = unescapeCsv(parts[9]).takeIf { it.isNotBlank() }
+                        data = dataRaw,
+                        tipologiaUva = unescapeCsv(if (parts.size > idxUva) parts[idxUva] else ""),
+                        operazione = unescapeCsv(if (parts.size > idxOp) parts[idxOp] else ""),
+                        aggiuntaDi = unescapeCsv(if (parts.size > idxAgg) parts[idxAgg] else "").takeIf { it.isNotBlank() },
+                        quantita = if (parts.size > idxQta) parts[idxQta].replace(",", ".").toDoubleOrNull() else null,
+                        unMis = unescapeCsv(if (parts.size > idxUm) parts[idxUm] else "").takeIf { it.isNotBlank() },
+                        note = unescapeCsv(if (parts.size > idxNote) parts[idxNote] else "").takeIf { it.isNotBlank() },
+                        foto = unescapeCsv(if (parts.size > idxFoto) parts[idxFoto] else "").takeIf { it.isNotBlank() }
                     )
                     operationDao.insertOperation(op)
                     importedCount++
                 } catch (e: Exception) {
-                    // Log error or skip invalid line
+                    // Salta riga corrotta
                 }
             }
         }
+        showMessage("Importazione completata: $importedCount operazioni caricate.")
         return importedCount
+    }
+
+    private fun getHarvestYearFromDate(dateStr: String): Int {
+        val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.ITALY)
+        return try {
+            val date = sdf.parse(dateStr)
+            val cal = Calendar.getInstance()
+            cal.time = date!!
+            val year = cal.get(Calendar.YEAR)
+            val month = cal.get(Calendar.MONTH) // 0-indexed, 0=Jan, 6=July
+            // Regola: se prima di Luglio fa parte della vendemmia dell'anno precedente
+            if (month < 6) year - 1 else year
+        } catch (e: Exception) {
+            _selectedYear.value
+        }
     }
 
     private fun escapeCsv(value: String): String {
