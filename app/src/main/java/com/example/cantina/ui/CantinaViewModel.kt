@@ -210,8 +210,8 @@ class CantinaViewModel(private val operationDao: OperationDao) : ViewModel() {
         val fileName = "export_cantina_$timestamp.csv"
         val file = File(exportsDir, fileName)
 
-        // Recuperiamo tutte le operazioni (senza filtro anno per il backup completo)
-        val allOps = operationDao.getAllOperationsSync()
+        // Recuperiamo tutte le operazioni (senza filtro anno per il backup completo) e ordiniamo per ID
+        val allOps = operationDao.getAllOperationsSync().sortedBy { it.id }
         
         val header = "id;vendemmiaAnno;data;tipologiaUva;operazione;aggiuntaDi;quantita;unMis;note;foto"
         val csv = StringBuilder(header).append("\n")
